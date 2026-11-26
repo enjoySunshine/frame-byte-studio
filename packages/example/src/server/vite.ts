@@ -4,6 +4,7 @@ process.env.SESSION_SECRET = "SESSION_SECRET";
 import { createEndpoint, createRouter, defineRoom, defineServer, monitor, playground } from 'colyseus';
 import { DatabaseDriver } from '@colyseus/database';
 import { MyRoom } from '../MyRoom.ts';
+import { FrameRoom } from '../FrameRoom.ts';
 import { database } from '../db/database.ts';
 
 export const server = defineServer({
@@ -13,6 +14,9 @@ export const server = defineServer({
 
   rooms: {
     my_room: defineRoom(MyRoom),
+    frame_room: defineRoom(FrameRoom),
+    "frame-byte-studio": defineRoom(FrameRoom),
+    my_room_2: defineRoom(FrameRoom),
   },
 
   express: (app) => {

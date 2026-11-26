@@ -33,6 +33,7 @@ async function seedAdminAndMod() {
 // const client = new Client<typeof server>("ws://localhost:2567");
 
 import { MyRoom } from "./MyRoom.ts";
+import { FrameRoom } from "./FrameRoom.ts";
 
 auth.oauth.addProvider("discord", {
   key: "799645393566695465",
@@ -260,6 +261,9 @@ export const server = config({
     my_room: defineRoom(MyRoom).
       filterBy(["progress"]).
       sortBy({ clients: -1 }),
+    frame_room: defineRoom(FrameRoom),
+    "frame-byte-studio": defineRoom(FrameRoom),
+    my_room_2: defineRoom(FrameRoom),
   },
 
   routes: createRouter({

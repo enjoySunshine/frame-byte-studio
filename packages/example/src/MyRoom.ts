@@ -10,6 +10,8 @@ import { database } from "./db/database.ts";
 import "@colyseus/auth";
 import { TrackUserSessionsPlugin } from "colyseus/plugins/track-user-sessions";
 
+export * from "./frameCodec.ts";
+
 const VERSION = 5;
 
 export const Player = schema({
@@ -151,8 +153,12 @@ export class MyRoom extends Room<{ state: MyRoomState, client: MyClient, input: 
 
   onJoin(client: MyClient, options: any) {
     const player = new Player();
-    player.x = Math.random() * this.state.mapWidth;
-    player.y = Math.random() * this.state.mapHeight;
+    // Deterministic frame-byte fixture spawn. The captured join snapshot has
+    // this player at 120,80 with score 7; movement handlers can then advance
+    // the same player to 340,220 without changing score.
+    player.x = 120;
+    player.y = 80;
+    player.score = 7;
     this.state.players.set(client.sessionId, player);
     console.log("ON JOIN", { VERSION });
   }

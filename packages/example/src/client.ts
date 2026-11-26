@@ -3,6 +3,7 @@ import { Client, Callbacks, Room } from '@colyseus/sdk';
 
 import type { server } from './server/vite.ts';
 import type { MyRoom } from './MyRoom.ts';
+import { applyFrameToCanvasPlayers, drawCanvasPlayers, type CanvasPlayer } from './canvasPlayers.ts';
 
 const logElement = document.querySelector<HTMLPreElement>('#log');
 const button = document.querySelector<HTMLButtonElement>('#connect');
@@ -11,7 +12,7 @@ const canvas = document.querySelector<HTMLCanvasElement>('#game');
 const ctx = canvas?.getContext('2d');
 
 let room: Room<MyRoom> | null;
-const players = new Map<string, { x: number; y: number }>();
+const players = new Map<string, CanvasPlayer>();
 
 // HTTP endpoint buttons — work without a room connection
 const httpClient = new Client<typeof server>(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
@@ -45,25 +46,7 @@ function setStatus(state: 'idle' | 'connecting' | 'connected' | 'disconnected', 
 
 function draw() {
   if (!ctx || !canvas) return;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  players.forEach((player, sessionId) => {
-    const isMe = sessionId === room?.sessionId;
-
-    // Player circle
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, 12, 0, Math.PI * 2);
-    ctx.fillStyle = isMe ? '#2563eb' : '#6b7280';
-    ctx.fill();
-
-    // Session ID label
-    ctx.fillStyle = '#9ca3af';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(sessionId.slice(0, 6), player.x, player.y + 24);
-  });
-
+  drawCanvasPlayers(ctx, canvas, players, room?.sessionId);
   requestAnimationFrame(draw);
 }
 
@@ -79,8 +62,9 @@ button?.addEventListener('click', async () => {
 
   try {
     const client = new Client<typeof server>(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
-    // room = await client.joinOrCreate('my_room');
-    room = await client.joinOrCreate('my_room_2');
+    // The registered example room is "my_room". "my_room_2" is also kept as a
+    // binary-frame compatibility room for direct packet tests.
+    room = await client.joinOrCreate('my_room');
 
     // allow reconnection immediately.
     room.reconnection.minUptime = 0;
@@ -93,7 +77,7 @@ button?.addEventListener('click', async () => {
     const callbacks = Callbacks.get(room);
 
     callbacks.onAdd("players", (player, sessionId) => {
-      players.set(sessionId, { x: player.x, y: player.y });
+      players.set(sessionId, { x: player.x, y: player.y, score: player.score });
       callbacks.listen(player, "x", (value) => {
         const p = players.get(sessionId);
         if (p) p.x = value;
@@ -102,12 +86,36 @@ button?.addEventListener('click', async () => {
         const p = players.get(sessionId);
         if (p) p.y = value;
       });
-      log(`Player joined: ${sessionId}`);
+      callbacks.listen(player, "score", (value) => {
+        const p = players.get(sessionId);
+        if (p) p.score = value;
+        if (sessionId === room?.sessionId) log(`score: ${value}`);
+      });
+      if (sessionId === room?.sessionId) {
+        log(`Player joined: ${sessionId} | score: ${player.score}`);
+      } else {
+        log(`Player joined: ${sessionId}`);
+      }
     });
 
     callbacks.onRemove("players", (_, sessionId) => {
       players.delete(sessionId);
       log(`Player left: ${sessionId}`);
+    });
+
+    // Binary side-channel: decode room-written bytes with the same fixture
+    // codec used by compatibility tests. Schema callbacks remain authoritative
+    // for ordinary state synchronization.
+    room.onMessage("*", (type, bytes) => {
+      if (type !== "frame_bytes") return;
+      try {
+        applyFrameToCanvasPlayers(
+          players,
+          bytes as Uint8Array | ArrayBuffer | number[],
+        );
+      } catch (error) {
+        console.warn("Failed to decode frame_bytes", error);
+      }
     });
 
     room.onLeave((code) => {
